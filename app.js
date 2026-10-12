@@ -151,6 +151,7 @@
     const dest = route.destination;
     const place = [dest.floor, dest.building].filter(Boolean).join(' · ');
     const outdated = version && version !== index.version;
+    const hasPhotos = steps.some((st) => st.photo);
     const chips = [`${route.walkMinutes} min walk`, `${route.distanceMeters} m`];
     if (route.floorChanges) chips.push(`${route.floorChanges} ${route.floorChanges === 1 ? 'floor' : 'floors'} by stairs`);
 
@@ -168,6 +169,11 @@
           <span class="step-count"></span>
           <span class="step-floor"></span>
         </div>
+        ${hasPhotos ? `
+        <div class="pano-wrap">
+          <div class="pano"></div>
+          <button type="button" class="pano-toggle" aria-expanded="true">Hide 360° view</button>
+        </div>` : ''}
         <strong class="step-title"></strong>
         <p class="step-desc"></p>
         <div class="step-buttons">
@@ -186,6 +192,29 @@
 
     let current = 0;
     const stepEl = app.querySelector('.step');
+
+    // 360° photo of the current step (open by default, can be hidden to save data)
+    let pano = null;
+    let panoOpen = store('polynav:pano') !== 'off';
+    const panoWrap = stepEl.querySelector('.pano-wrap');
+    if (panoWrap) {
+      const toggleBtn = panoWrap.querySelector('.pano-toggle');
+      const panoEl = panoWrap.querySelector('.pano');
+      const applyPano = () => {
+        panoEl.hidden = !panoOpen;
+        toggleBtn.textContent = panoOpen ? 'Hide 360° view' : 'Show 360° view of this spot';
+        toggleBtn.setAttribute('aria-expanded', String(panoOpen));
+        if (panoOpen && !pano) pano = createPanorama(panoEl);
+        if (pano && panoOpen) pano.show(steps[current].photo, steps[current].nodeName);
+      };
+      toggleBtn.addEventListener('click', () => {
+        panoOpen = !panoOpen;
+        store('polynav:pano', panoOpen ? 'on' : 'off');
+        applyPano();
+      });
+      cleanup.push(() => pano && pano.destroy());
+      panoWrap.applyPano = applyPano;
+    }
     const prevBtn = stepEl.querySelector('[data-act="prev"]');
     const nextBtn = stepEl.querySelector('[data-act="next"]');
     const items = Array.from(app.querySelectorAll('.directions li'));
@@ -207,6 +236,12 @@
       });
       items.forEach((li, k) => li.classList.toggle('active', k === active));
       map.setStep(current);
+      if (panoWrap) {
+        panoWrap.applyPano();
+        // Start downloading the next photo so "Next" feels instant
+        const nextPhoto = panoOpen && steps[current + 1] && steps[current + 1].photo;
+        if (nextPhoto) { const img = new Image(); img.src = nextPhoto; }
+      }
       keepScreenOn();
     }
 
@@ -235,6 +270,162 @@
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && parseHash().page === 'route') keepScreenOn();
   });
+
+  // ---------- 360° viewer (plain WebGL, no library) ----------
+  // Shows one equirectangular photo (2:1). Drag to look around, pinch or scroll to zoom.
+  function createPanorama(container) {
+    container.innerHTML = `
+      <canvas class="pano-canvas"></canvas>
+      <div class="pano-badge"></div>
+      <div class="pano-msg" hidden></div>
+      <div class="pano-hint">Drag to look around</div>`;
+    const canvas = container.querySelector('canvas');
+    const badge = container.querySelector('.pano-badge');
+    const msg = container.querySelector('.pano-msg');
+    const hint = container.querySelector('.pano-hint');
+
+    const gl = canvas.getContext('webgl', { antialias: false }) || canvas.getContext('experimental-webgl');
+    const say = (text) => { msg.hidden = !text; msg.innerHTML = text || ''; canvas.style.visibility = text ? 'hidden' : 'visible'; };
+    if (!gl) {
+      say('<strong>360° view isn’t supported on this phone</strong><span>Follow the map and directions.</span>');
+      return { show(url, label) { badge.textContent = `360° · ${label || ''}`; }, destroy() {} };
+    }
+
+    const vs = 'attribute vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }';
+    const fs = `precision highp float;
+      uniform sampler2D tex; uniform vec2 res; uniform float yaw; uniform float pitch; uniform float fov;
+      const float PI = 3.14159265;
+      void main() {
+        vec2 q = (gl_FragCoord.xy / res) * 2.0 - 1.0;
+        q.x *= res.x / res.y;
+        vec3 d = normalize(vec3(q.x, q.y, 1.0 / tan(fov * 0.5)));
+        float cp = cos(pitch), sp = sin(pitch);
+        d = vec3(d.x, d.y * cp + d.z * sp, -d.y * sp + d.z * cp);
+        float cy = cos(yaw), sy = sin(yaw);
+        d = vec3(d.x * cy + d.z * sy, d.y, -d.x * sy + d.z * cy);
+        float lon = atan(d.x, d.z);
+        float lat = asin(clamp(d.y, -1.0, 1.0));
+        gl_FragColor = texture2D(tex, vec2(lon / (2.0 * PI) + 0.5, 0.5 - lat / PI));
+      }`;
+    const shader = (type, src) => { const sh = gl.createShader(type); gl.shaderSource(sh, src); gl.compileShader(sh); return sh; };
+    const prog = gl.createProgram();
+    gl.attachShader(prog, shader(gl.VERTEX_SHADER, vs));
+    gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(prog);
+    gl.useProgram(prog);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(prog, 'p');
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    const U = (n) => gl.getUniformLocation(prog, n);
+    const uRes = U('res'), uYaw = U('yaw'), uPitch = U('pitch'), uFov = U('fov');
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    // Photos are not power-of-two sized, so: no mipmaps, clamp at the edges
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    const DEG = Math.PI / 180;
+    let yaw = 0, pitch = 0, fov = 85 * DEG;
+    let hasImage = false;
+    let raf = 0;
+    let token = 0;
+    let lastTouch = Date.now();
+
+    function draw() {
+      raf = 0;
+      if (!hasImage) return;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const w = Math.round(canvas.clientWidth * dpr), h = Math.round(canvas.clientHeight * dpr);
+      if (!w || !h) return;
+      if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+      gl.viewport(0, 0, w, h);
+      gl.uniform2f(uRes, w, h);
+      gl.uniform1f(uYaw, yaw);
+      gl.uniform1f(uPitch, pitch);
+      gl.uniform1f(uFov, fov);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+    const redraw = () => { if (!raf) raf = requestAnimationFrame(draw); };
+
+    // Slow turn when nobody has touched it for 8 seconds
+    const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const spin = setInterval(() => {
+      if (!reduceMotion && hasImage && Date.now() - lastTouch > 8000 && !document.hidden) { yaw += 0.004; redraw(); }
+    }, 33);
+
+    // Drag (one finger / mouse) and pinch (two fingers)
+    const pointers = new Map();
+    let pinchStart = 0, fovStart = fov;
+    canvas.addEventListener('pointerdown', (e) => {
+      canvas.setPointerCapture(e.pointerId);
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      lastTouch = Date.now();
+      hint.hidden = true;
+      if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        pinchStart = Math.hypot(a.x - b.x, a.y - b.y);
+        fovStart = fov;
+      }
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      const prev = pointers.get(e.pointerId);
+      if (!prev) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      lastTouch = Date.now();
+      if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinchStart) fov = Math.min(100 * DEG, Math.max(30 * DEG, fovStart * pinchStart / dist));
+      } else {
+        const k = fov / Math.max(canvas.clientHeight, 1);
+        yaw -= (e.clientX - prev.x) * k;
+        pitch = Math.max(-85 * DEG, Math.min(85 * DEG, pitch + (e.clientY - prev.y) * k));
+      }
+      redraw();
+    });
+    const up = (e) => { pointers.delete(e.pointerId); if (pointers.size < 2) pinchStart = 0; };
+    canvas.addEventListener('pointerup', up);
+    canvas.addEventListener('pointercancel', up);
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      fov = Math.min(100 * DEG, Math.max(30 * DEG, fov * (e.deltaY > 0 ? 1.1 : 0.9)));
+      lastTouch = Date.now();
+      redraw();
+    }, { passive: false });
+    const ro = new ResizeObserver(redraw);
+    ro.observe(canvas);
+
+    return {
+      show(url, label) {
+        badge.textContent = `360° · ${label || ''}`;
+        const my = ++token;
+        if (!url) { hasImage = false; say('<strong>No 360° photo for this step</strong><span>Follow the map and directions.</span>'); return; }
+        say(hasImage ? '' : '<span class="spinner"></span><span>Loading 360° view…</span>');
+        if (hasImage) canvas.style.visibility = 'visible';
+        const img = new Image();
+        img.onload = () => {
+          if (my !== token) return;
+          gl.bindTexture(gl.TEXTURE_2D, tex);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, img);
+          hasImage = true;
+          yaw = 0; pitch = 0; fov = 85 * DEG;
+          say('');
+          redraw();
+        };
+        img.onerror = () => {
+          if (my !== token) return;
+          hasImage = false;
+          say('<strong>Couldn’t load the 360° photo</strong><span>Check your signal. The map and directions still work.</span>');
+        };
+        img.src = url;
+      },
+      destroy() { clearInterval(spin); ro.disconnect(); cancelAnimationFrame(raf); token++; },
+    };
+  }
 
   // ---------- the map (same drawing as the kiosk's RouteMap.vue) ----------
   function createRouteMap(container, steps, destinationName) {
