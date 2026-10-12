@@ -1,0 +1,308 @@
+/* PolyNav phone page. Same colours as the kiosk (PUP maroon). */
+:root {
+  --maroon: #730d1f;
+  --maroon-strong: #800019;
+  --gold: #f2b233;
+  --ink: #292324;
+  --ink-soft: #4a4448;
+  --muted: #61616b;
+  --line: #e3dcd8;
+  --tint: #f4ecec;
+  --card: #fbf8f7;
+  --bg: #ffffff;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+button { font: inherit; }
+
+.top {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 14px 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--maroon);
+  color: #fff;
+  font-weight: 800;
+  font-size: 20px;
+}
+
+.brand-text { display: flex; flex-direction: column; }
+.brand-text strong { color: var(--maroon); font-size: 18px; }
+.brand-text span { color: var(--muted); font-size: 12px; }
+
+.page {
+  max-width: 560px;
+  min-height: 80vh;
+  margin: 0 auto;
+  padding: 16px 16px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---------- status / errors ---------- */
+.status {
+  min-height: 50vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 12px;
+  text-align: center;
+}
+.status strong { color: var(--maroon); font-size: 20px; }
+.status p { margin: 0; color: var(--ink-soft); font-size: 15px; line-height: 1.45; }
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(115, 13, 31, 0.2);
+  border-top-color: var(--maroon);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- destination ---------- */
+.eyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.dest h1 { margin: 4px 0 2px; color: var(--maroon); font-size: 24px; line-height: 1.2; }
+.place { margin: 0; color: var(--ink-soft); font-size: 14px; }
+
+.chips { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+.chips span {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--tint);
+  color: var(--maroon);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.notice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff6e0;
+  color: #6b4b00;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* ---------- map ---------- */
+.map {
+  position: relative;
+  height: 300px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #e4e8e1;
+  touch-action: pan-y;
+}
+.map svg { display: block; width: 100%; height: 100%; }
+
+.route-casing, .route-line, .route-done {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.route-casing { stroke: #fff; }
+.route-line { stroke: var(--maroon-strong); }
+.route-done { stroke: #d9b6bd; }
+
+.draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: draw-route 1.6s ease-out forwards;
+}
+@keyframes draw-route { to { stroke-dashoffset: 0; } }
+
+.marker-start { fill: #fff; stroke: var(--maroon-strong); }
+.marker-end { fill: var(--maroon-strong); stroke: #fff; }
+.marker-current .dot { fill: var(--gold); stroke: #fff; }
+.marker-current .pulse {
+  fill: rgba(242, 178, 51, 0.35);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pulse 1.6s ease-out infinite;
+}
+@keyframes pulse {
+  from { transform: scale(0.5); opacity: 1; }
+  to { transform: scale(1.4); opacity: 0; }
+}
+
+.map-label {
+  fill: #2a1d20;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-linejoin: round;
+}
+
+.floor-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  max-width: 60%;
+  overflow: hidden;
+  padding: 6px 11px;
+  border-radius: 999px;
+  background: rgba(128, 0, 25, 0.92);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.view-toggle {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+.view-toggle button {
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  color: var(--maroon-strong);
+  font-size: 13px;
+  font-weight: 700;
+}
+.view-toggle button.active { background: var(--maroon-strong); color: #fff; }
+
+/* ---------- current step ---------- */
+.step {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--card);
+}
+.step-head { display: flex; justify-content: space-between; gap: 8px; }
+.step-count { flex: none; color: var(--muted); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.step-floor { color: var(--maroon); font-size: 13px; font-weight: 700; text-align: right; }
+.step-title { color: var(--maroon); font-size: 20px; line-height: 1.25; }
+.step-desc { margin: 0; color: #3b3b40; font-size: 15px; line-height: 1.45; }
+
+.step-buttons {
+  margin-top: 4px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.btn {
+  min-height: 48px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-primary { border: none; background: var(--maroon); color: #fff; }
+.btn-secondary { border: 1px solid var(--maroon); background: #fff; color: var(--maroon); }
+.btn:disabled { opacity: 0.35; cursor: default; }
+
+/* ---------- directions list ---------- */
+.directions h2 { margin: 4px 0 10px; font-size: 17px; }
+.directions ol {
+  margin: 0;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.directions li {
+  padding: 8px 10px;
+  border-radius: 10px;
+  color: #3b3b40;
+  font-size: 15px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.directions li.active { background: var(--tint); color: var(--maroon); font-weight: 700; }
+
+.foot {
+  margin: 0;
+  color: #7a7378;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
+.foot a { color: var(--maroon); }
+
+/* ---------- home / search ---------- */
+.home h1 { margin: 0 0 6px; color: var(--maroon); font-size: 24px; line-height: 1.2; }
+.home p { margin: 0; color: var(--ink-soft); font-size: 15px; line-height: 1.45; }
+
+.search {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  font-size: 16px;
+}
+.search:focus { outline: 2px solid var(--maroon); outline-offset: 1px; }
+
+.results { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.results a {
+  display: block;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.results a strong { display: block; color: var(--maroon); font-size: 15px; }
+.results a span { color: var(--muted); font-size: 13px; }
+
+.last-route {
+  display: block;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--tint);
+  color: var(--maroon);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.noscript { padding: 16px; text-align: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; }
+  .draw { animation: none; stroke-dashoffset: 0; }
+  .marker-current .pulse { animation: none; }
+}

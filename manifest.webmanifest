@@ -1,0 +1,9 @@
+{
+  "name": "PolyNav Route",
+  "short_name": "PolyNav",
+  "description": "Walking directions around PUP Sta. Mesa from the PolyNav kiosk.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#730d1f"
+}
