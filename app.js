@@ -52,7 +52,7 @@
     const [path, query = ''] = raw.split('?');
     const params = new URLSearchParams(query);
     const m = path.match(/^\/r\/([^/]+)$/);
-    return m ? { page: 'route', id: decodeURIComponent(m[1]), version: params.get('v') } : { page: 'home' };
+    return m ? { page: 'route', id: decodeURIComponent(m[1]), version: params.get('v'), alt: params.get('alt') === '1' } : { page: 'home' };
   }
 
   function leave() {
@@ -73,7 +73,7 @@
   async function render() {
     leave();
     const where = parseHash();
-    if (where.page === 'route') return showRoute(where.id, where.version);
+    if (where.page === 'route') return showRoute(where.id, where.version, where.alt);
     return showHome();
   }
 
@@ -134,11 +134,16 @@
   }
 
   // ---------- route page ----------
-  async function showRoute(id, version) {
+  async function showRoute(id, version, wantAlt) {
     showStatus('', 'Loading your route…');
     let route;
     try {
-      [, route] = await Promise.all([loadIndex(), getJSON(`data/routes/${encodeURIComponent(id)}.json`)]);
+      let saved;
+      [, saved] = await Promise.all([loadIndex(), getJSON(`data/routes/${encodeURIComponent(id)}.json`)]);
+      // The recommended route, or its alternate (a second, different way there) when asked for
+      route = wantAlt && saved.alternate ? { ...saved.alternate, alternate: saved.alternate } : saved;
+      route.isAlt = Boolean(wantAlt && saved.alternate);
+      route.altInfo = saved.alternate || null;
     } catch (e) {
       if (e.status === 404) {
         return showStatus('Route not found', 'This destination isn’t on the PolyNav phone site. Search for it instead, or scan the QR code at the kiosk again.', { href: '#/', label: 'Search destinations' });
@@ -154,13 +159,20 @@
     const hasPhotos = steps.some((st) => st.photo);
     const chips = [`${route.walkMinutes} min walk`, `${route.distanceMeters} m`];
     if (route.floorChanges) chips.push(`${route.floorChanges} ${route.floorChanges === 1 ? 'floor' : 'floors'} by stairs`);
+    const base = `#/r/${encodeURIComponent(id)}${version ? `?v=${encodeURIComponent(version)}` : '?'}`;
+    const altSwitch = route.altInfo
+      ? (route.isAlt
+        ? `<a class="alt-switch" href="${base}">‹ Back to recommended route</a>`
+        : `<a class="alt-switch" href="${base}&alt=1">Path blocked? Show alternate route (+${route.altInfo.extraMeters} m)</a>`)
+      : '';
 
     app.innerHTML = `
       <section class="dest">
         <p class="eyebrow">Route to</p>
         <h1>${esc(dest.name)}</h1>
         ${place ? `<p class="place">${esc(place)}</p>` : ''}
-        <div class="chips">${chips.map((c) => `<span>${esc(c)}</span>`).join('')}</div>
+        <div class="chips">${route.isAlt ? '<span class="alt-chip">Alternate route</span>' : ''}${chips.map((c) => `<span>${esc(c)}</span>`).join('')}</div>
+        ${altSwitch}
       </section>
       ${outdated ? '<p class="notice">The kiosk’s map was updated after this page was published, so a few steps may differ from the kiosk screen.</p>' : ''}
       <section class="map" aria-label="Route map"></section>

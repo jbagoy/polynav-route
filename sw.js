@@ -5,7 +5,7 @@
  * - Each route is saved the first time it is opened, so it can be reopened offline.
  * - Data is fetched fresh when there is a connection, and from the saved copy when not.
  *
- * 2f6ff129-mvelnu5n is replaced by build-phone-site.js, so every rebuild clears old saved copies.
+ * 2f6ff129-mvem7gtg is replaced by build-phone-site.js, so every rebuild clears old saved copies.
  */
 const CACHE = 'polynav-__BUILD__';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'campus-map.jpg', 'manifest.webmanifest', 'data/index.json'];

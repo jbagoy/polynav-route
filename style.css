@@ -375,3 +375,17 @@ button { font: inherit; }
   .draw { animation: none; stroke-dashoffset: 0; }
   .marker-current .pulse { animation: none; }
 }
+
+/* Alternate route switch */
+.alt-switch {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 9px 14px;
+  border: 2px solid var(--maroon);
+  border-radius: 12px;
+  color: var(--maroon);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.chips .alt-chip { background: #fff6e0; color: #6b4b00; }
